@@ -70,7 +70,35 @@ def run_workflow(req: IPRequest):
 #     except Exception as e:
 #         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/results")
+@app.get("/result")
+def get_results():
+    if not os.path.exists(RESULT_DIR):
+        raise HTTPException(status_code=404, detail="Results directory not found.")
+
+    filtered_results = {}
+
+    for file_path in glob(os.path.join(RESULT_DIR, "*.json")):
+        try:
+            with open(file_path, "r") as f:
+                result = json.load(f)
+                
+                for key, value in result.items():
+                    if "success" in value and value["success"]:
+                        filtered_results[key] = value
+
+        except json.JSONDecodeError as e:
+            print(f"[!] Error parsing {file_path}: {e}")
+        except Exception as e:
+            print(f"[!] Failed to read {file_path}: {e}")
+
+    if not filtered_results:
+        raise HTTPException(status_code=404, detail="No valid filtered result data found.")
+
+    return filtered_results
+
+
+
+@app.get("/raw_results")
 def get_all_results():
     if not os.path.exists(RESULT_DIR):
         raise HTTPException(status_code=404, detail="Results directory not found.")

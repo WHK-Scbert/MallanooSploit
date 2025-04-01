@@ -153,15 +153,19 @@ class SMBClientNode(BaseNode):
 class NmapNode(BaseNode):
     def __init__(self, node_id, name, parameters):
         super().__init__(node_id, name, parameters)
+        self.node_type = "NmapNode"
+        print(f"Initialized NmapNode with ID: {node_id}, Name: {name}")
 
     def execute(self, input_data=None):
         ip = self.parameters.get("ip", "127.0.0.1")
         port_range = self.parameters.get("port", "1-1024")
-        option = self.parameters.get("option", "-sS")
-        cmd = f"nmap {option} -p {port_range} {ip}"
-
+        option = self.parameters.get("option", "-sS -O")  # Adding -O for OS detection
+        
         success = {}
         data = {}
+
+        cmd = f"nmap {option} -p {port_range} {ip}"
+        print(f"Executing command: {cmd}")
 
         try:
             result = subprocess.run(
@@ -175,48 +179,92 @@ class NmapNode(BaseNode):
             )
 
             output = result.stdout
+            print(f"Command output:\n{output}")
             current_ip = None
+            os_info = {}  # Store detected OS information
 
             for line in output.splitlines():
-                ip_match = re.search(r"Nmap scan report for ([\d\.]+)", line)
-                port_match = re.match(r"^(\d+)/tcp\s+(open|closed|filtered)", line)
+                print(f"Parsing line: {line}")
+                
+                # Match lines showing IP addresses
+                ip_match = re.search(r"Nmap scan report for (.+) \(([\d\.]+)\)", line) or re.search(r"Nmap scan report for ([\d\.]+)", line)
+                
+                # Match lines showing port scan results
+                port_match = re.match(r"^(\d+)/tcp\s+(open|closed|filtered)\s+(.+)", line)
+
+                # Match OS detection lines
+                device_type_match = re.match(r"^Device type:\s+(.+)", line)
+                running_match = re.match(r"^Running:\s+(.+)", line)
+                os_cpe_match = re.match(r"^OS CPE:\s+(.+)", line)
+                os_details_match = re.match(r"^OS details:\s+(.+)", line)
 
                 if ip_match:
-                    current_ip = ip_match.group(1)
-                    data[current_ip] = {"open": [], "closed": []}
+                    if len(ip_match.groups()) == 2:
+                        current_ip = ip_match.group(2)
+                    else:
+                        current_ip = ip_match.group(1)
+                    
+                    data[current_ip] = {"open": [], "closed": [], "os": {}}
+                    print(f"Detected host: {current_ip}")
 
                 elif port_match and current_ip:
                     port = int(port_match.group(1))
                     state = port_match.group(2)
+                    service = port_match.group(3)
+                    
                     if state == "open":
-                        data[current_ip]["open"].append(port)
+                        data[current_ip]["open"].append({"port": port, "service": service})
+                        print(f"Open port detected: {port} ({service}) on {current_ip}")
                     else:
-                        data[current_ip]["closed"].append(port)
+                        data[current_ip]["closed"].append({"port": port, "service": service})
+                        print(f"Closed/Filtered port detected: {port} ({service}) on {current_ip}")
 
+                elif current_ip:
+                    if device_type_match:
+                        os_info["device_type"] = device_type_match.group(1)
+                        print(f"Device type detected: {os_info['device_type']}")
+
+                    if running_match:
+                        os_info["running"] = running_match.group(1)
+                        print(f"Running OS detected: {os_info['running']}")
+
+                    if os_cpe_match:
+                        os_info["os_cpe"] = os_cpe_match.group(1)
+                        print(f"OS CPE detected: {os_info['os_cpe']}")
+
+                    if os_details_match:
+                        os_info["os_details"] = os_details_match.group(1)
+                        print(f"OS Details detected: {os_info['os_details']}")
+
+                    if os_info and current_ip:
+                        data[current_ip]["os"] = os_info
+
+            # Populate success dictionary with IPs that have open ports
             for ip_addr, ports in data.items():
                 if ports["open"]:
-                    success[ip_addr] = ports["open"]
+                    success[ip_addr] = [port["port"] for port in ports["open"]]
 
             self.output = {
-                "output": "Good" if success else "Error",
-                "success": success,
-                "data": data
-            }
-
-        except subprocess.CalledProcessError as e:
-            self.output = {
-                "output": "Error",
-                "success": {},
-                "data": {
-                    ip: {
-                        "open": [],
-                        "closed": [],
-                        "error": e.stderr.strip() if e.stderr else str(e)
-                    }
+                "message": {
+                    "output": "Good" if success else "Error",
+                    "success": success,
+                    "data": data
                 }
             }
+            print("Scan completed successfully.")
+            return self.output
 
-        return self.output
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr.strip() if e.stderr else str(e)
+            print(f"Error occurred during scan: {error_msg}")
+            self.output = {
+                "message": {
+                    "output": "Error",
+                    "success": {},
+                    "data": {}
+                }
+            }
+            return self.output
 
 
 class BannerGrabNode(BaseNode):

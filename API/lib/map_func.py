@@ -40,12 +40,17 @@ def build_nodes():
     }
     smb_nmap_node = NmapNode('3', 'smb_nmap', smb_nmap_parameters)
 
+
     smbclient_parameters = {
         "ip": ip,
         "threads": 30 
     }
 
-    smbclient_node = SMBClientNode('4','smbclient', smbclient_parameters)
+    smbclient_node = SMBClientNode(
+        '4',
+        'smbclient', 
+        smbclient_parameters
+    )
 
     ftp_parameters = {
         "ip": ip,
@@ -112,6 +117,26 @@ def build_nodes():
             "prompt": lib.prompt.machine_checker
         }
     )
+
+
+    os_nmap_parameters = {
+        "ip": ip,
+        "port": "22, 445",
+        "option": "-O --fuzzy"
+    }
+    os_nmap_node = NmapNode('11', 'os_nmap', os_nmap_parameters)
+
+
+    report_generate_node = ChatGPTNode(
+        node_id="99",
+        name="ReportGenerate",
+        parameters={
+            "api_key": "OPENAI_API_KEY",
+            "model": "gpt-3.5-turbo",
+            "prompt": lib.prompt.report_generate
+        }
+    )
+
     # Nodes' map
     nodes = {
         "1": ping1,
@@ -123,6 +148,8 @@ def build_nodes():
         "7": chat_node,
         "8": blue_node,
         "9": nmap_vuln_node,
-        "10": machine_check_node
+        "10": machine_check_node,
+        "11": os_nmap_node,
+        "99": report_generate_node
     }
     return nodes

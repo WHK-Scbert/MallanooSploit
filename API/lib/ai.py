@@ -64,3 +64,5 @@ class ChatGPTNode(BaseNode):
             }
 
         return self.output
+
+
