@@ -3,12 +3,13 @@ from pydantic import BaseModel
 import json
 from lib.config import ip as current_ip
 import os
-from lib.workflow import SMBCraker_Builder
+from lib.workflow import SMBCraker_Builder, FTPAnonymousCheck_Builder
 from lib.map_func import build_nodes
+from glob import glob
 
 # --- CONFIG ---
 IP_FILE = "./target_ip.txt"
-RESULT_FILE = "workflow_results.json"
+RESULT_DIR = "./results"  # Folder containing multiple result JSON files
 
 # --- FASTAPI SETUP ---
 app = FastAPI(title="MallanooSploit API", version="1.0")
@@ -36,21 +37,57 @@ def update_target_ip(req: IPRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# @app.post("/run")
+# def run_workflow():
+#     try:
+#         nodes = build_nodes()
+#         SMB_Cracker_wf = SMBCraker_Builder(nodes)
+#         results = SMB_Cracker_wf.execute()
+#         return {"message": "Workflow executed", "results": results}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/run")
-def run_workflow():
+def run_workflow(req: IPRequest):
     try:
-        nodes = build_nodes()
+        nodes = build_nodes(req.ip.strip())
         SMB_Cracker_wf = SMBCraker_Builder(nodes)
-        results = SMB_Cracker_wf.execute()
-        return {"message": "Workflow executed", "results": results}
+        result1 = SMB_Cracker_wf.execute()
+
+        FTPAnnonymous_wf = FTPAnonymousCheck_Builder(nodes)
+        result2 = FTPAnnonymous_wf.execute()
+        return {"message": "Workflow executed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# @app.post("/run")
+# def run_workflow():
+#     try:
+#         nodes = build_nodes()
+#         SMB_Cracker_wf = SMBCraker_Builder(nodes)
+#         results = SMB_Cracker_wf.execute()
+#         return {"message": "Workflow executed", "results": results}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/results")
-def get_last_results():
-    if os.path.exists(RESULT_FILE):
-        with open(RESULT_FILE, "r") as f:
-            data = json.load(f)
-        return data
-    else:
-        raise HTTPException(status_code=404, detail="No result file found")
+def get_all_results():
+    if not os.path.exists(RESULT_DIR):
+        raise HTTPException(status_code=404, detail="Results directory not found.")
+
+    merged_results = {}
+
+    for file_path in glob(os.path.join(RESULT_DIR, "*.json")):
+        try:
+            with open(file_path, "r") as f:
+                result = json.load(f)
+                merged_results.update(result)  # Merge top-level keys (e.g. node IDs)
+        except json.JSONDecodeError as e:
+            print(f"[!] Error parsing {file_path}: {e}")
+        except Exception as e:
+            print(f"[!] Failed to read {file_path}: {e}")
+
+    if not merged_results:
+        raise HTTPException(status_code=404, detail="No valid result data found.")
+    
+    return merged_results

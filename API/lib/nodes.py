@@ -90,7 +90,7 @@ class FTPAnonymousNode(BaseNode):
             try:
                 ftp = ftplib.FTP()
                 ftp.connect(ip, ftp_port, timeout=timeout)
-                ftp.login("anonymous", "anonymous@domain.com")
+                ftp.login("anonymous", "annonymous")
                 ftp.quit()
                 success[ip] = True
                 data[ip] = {"status": "Good", "details": "Anonymous login successful"}
