@@ -461,6 +461,8 @@ class SMBMountNode(BaseNode):
             return {"status": "error", "info": str(e)}
 
     def execute(self, inputs):
+        data = self.previous_input
+        print(data)
         # Read the SMB_Cracker_Result.json
         with open(self.parameters.get("input_file", "SMB_Cracker_Result.json"), 'r') as f:
             data = json.load(f)

@@ -1,5 +1,5 @@
 # At the top
-from lib.nodes import PingNode, NmapNode, SMBClientNode, FTPAnonymousNode, BannerGrabNode, Workflow, NMAPVulnNode
+from lib.nodes import PingNode, NmapNode, SMBClientNode, FTPAnonymousNode, BannerGrabNode, Workflow, NMAPVulnNode, SMBMountNode
 from lib.ai import ChatGPTNode
 from lib.exploit import BlueNode
 import lib.prompt
@@ -127,6 +127,15 @@ def build_nodes():
     os_nmap_node = NmapNode('11', 'os_nmap', os_nmap_parameters)
 
 
+    smb_mount_node = SMBMountNode(
+        node_id="1", 
+        name="SMB Enumeration and Mount Node", 
+        parameters={
+            "input_file": "./results/SMB_Cracker_Result.json"
+        }
+        )
+
+
     report_generate_node = ChatGPTNode(
         node_id="99",
         name="ReportGenerate",
@@ -150,6 +159,7 @@ def build_nodes():
         "9": nmap_vuln_node,
         "10": machine_check_node,
         "11": os_nmap_node,
+        "12": smb_mount_node,
         "99": report_generate_node
     }
     return nodes
