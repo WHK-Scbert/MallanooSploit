@@ -8,6 +8,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 import openai
 from datetime import datetime
+import os
 
 
 class BaseNode:
@@ -426,6 +427,90 @@ class NMAPVulnNode(BaseNode):
 
 
 
+class SMBMountNode(BaseNode):
+    def __init__(self, node_id, name, parameters, previous_input=None):
+        super().__init__(node_id, name, parameters, previous_input)
+        self.output = {}
+
+    def enumerate_shares(self, ip):
+        try:
+            result = subprocess.check_output(['smbclient', '-L', f'//{ip}', '-N'], stderr=subprocess.STDOUT, text=True)
+            return result
+        except subprocess.CalledProcessError as e:
+            return e.output
+
+    def parse_shares(self, output):
+        shares = []
+        lines = output.splitlines()
+        for line in lines:
+            if 'Disk' in line:
+                share_name = line.split()[0]
+                shares.append(share_name)
+        return shares
+
+    def mount_share(self, ip, share_name, mount_point):
+        os.makedirs(mount_point, exist_ok=True)
+        command = f"sudo mount -t cifs //{ip}/{share_name} {mount_point} -o guest"
+        try:
+            result = subprocess.run(command, shell=True, capture_output=True, text=True)
+            if result.returncode == 0:
+                return {"status": "success", "info": f"Mounted {share_name} from {ip} at {mount_point}"}
+            else:
+                return {"status": "error", "info": result.stderr}
+        except Exception as e:
+            return {"status": "error", "info": str(e)}
+
+    def execute(self, inputs):
+        # Read the SMB_Cracker_Result.json
+        with open(self.parameters.get("input_file", "SMB_Cracker_Result.json"), 'r') as f:
+            data = json.load(f)
+
+        # Retrieve IP addresses from the 'success' key
+        ips = list(data['4']['success'].keys())
+        base_dir = './smb_mounts'
+        os.makedirs(base_dir, exist_ok=True)
+
+        results = {}
+        success_ips = {}  # To store only IPs that have mountable shares
+
+        for ip in ips:
+            ip_dir = os.path.join(base_dir, ip)
+            os.makedirs(ip_dir, exist_ok=True)
+            print(f"\nEnumerating shares for {ip}...")
+
+            # Enumerate shares
+            share_output = self.enumerate_shares(ip)
+            shares = self.parse_shares(share_output)
+
+            if not shares:
+                results[ip] = {"status": "error", "info": "No shares found or enumeration failed."}
+                continue
+
+            results[ip] = {"shares": {}, "status": "success"}
+            mountable_shares = {}
+
+            for share in shares:
+                share_dir = os.path.join(ip_dir, share)
+                os.makedirs(share_dir, exist_ok=True)
+
+                print(f"Attempting to mount share '{share}' from {ip}...")
+                mount_result = self.mount_share(ip, share, share_dir)
+                results[ip]["shares"][share] = mount_result
+
+                if mount_result["status"] == "success":
+                    mountable_shares[share] = mount_result
+
+            if mountable_shares:
+                success_ips[ip] = mountable_shares  # Only add IPs that have mountable shares
+
+        self.output = {
+            "output": "SMB Enumeration and Mounting Complete",
+            "success": success_ips,
+            "data": results
+        }
+        return self.output
+
+
 
 
 class Workflow:
@@ -450,6 +535,8 @@ class Workflow:
         if from_node_id in self.nodes and to_node_id in self.nodes:
             self.nodes[from_node_id].add_connection(to_node_id)
             self.incoming_count[to_node_id] += 1
+            # Passing the output from the current node as the previous input to the next node
+            self.nodes[to_node_id].previous_input = self.nodes[from_node_id].output
 
     def execute(self):
         executed = set()

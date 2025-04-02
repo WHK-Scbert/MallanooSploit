@@ -94,6 +94,15 @@ def get_results():
     if not filtered_results:
         raise HTTPException(status_code=404, detail="No valid filtered result data found.")
 
+    # Save the filtered results to a file
+    filtered_file_path = os.path.join(RESULT_DIR, "filtered_results.json")
+    try:
+        with open(filtered_file_path, "w") as f:
+            json.dump(filtered_results, f, indent=4)
+        print(f"[💾] Filtered results saved to {filtered_file_path}")
+    except Exception as e:
+        print(f"[!] Failed to write filtered results: {e}")
+
     return filtered_results
 
 
