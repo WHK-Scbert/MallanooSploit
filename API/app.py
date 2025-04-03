@@ -6,6 +6,9 @@ import os
 from lib.workflow import SMBCraker_Builder, FTPAnonymousCheck_Builder
 from lib.map_func import build_nodes
 from glob import glob
+from fastapi.middleware.cors import CORSMiddleware
+from lib.json_builder import organize_results_by_ip
+
 
 # --- CONFIG ---
 IP_FILE = "./target_ip.txt"
@@ -13,6 +16,13 @@ RESULT_DIR = "./results"  # Folder containing multiple result JSON files
 
 # --- FASTAPI SETUP ---
 app = FastAPI(title="MallanooSploit API", version="1.0")
+# Allow your Svelte app to access the FastAPI backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or specify your frontend URL, e.g., ["http://localhost:5173"]
+    allow_methods=["*"],   # Allow all methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],   # Allow all headers
+)
 
 # --- MODELS ---
 class IPRequest(BaseModel):
@@ -60,6 +70,16 @@ def run_workflow(req: IPRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/run_node")
+def run_workflow(req: IPRequest, node: str):
+    try:
+        nodes = build_nodes(req.ip.strip())
+        result = nodes[node].execute()
+        return {"message": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # @app.post("/run")
 # def run_workflow():
 #     try:
@@ -103,7 +123,26 @@ def get_results():
     except Exception as e:
         print(f"[!] Failed to write filtered results: {e}")
 
-    return filtered_results
+    # Process the filtered file using organize_results_by_ip
+    try:
+        organize_results_by_ip(filtered_file_path)
+    except Exception as e:
+        print(f"[!] Failed to organize results by IP: {e}")
+        raise HTTPException(status_code=500, detail="Failed to organize results by IP.")
+
+    # Read the result_by_ip.json file and return it
+    result_by_ip_path = os.path.join(RESULT_DIR, "result_by_ip.json")
+    if not os.path.exists(result_by_ip_path):
+        raise HTTPException(status_code=404, detail="result_by_ip.json not found.")
+
+    try:
+        with open(result_by_ip_path, "r") as f:
+            result_by_ip = json.load(f)
+    except Exception as e:
+        print(f"[!] Failed to read result_by_ip.json: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read result_by_ip.json.")
+
+    return result_by_ip
 
 
 
