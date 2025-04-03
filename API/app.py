@@ -28,6 +28,10 @@ app.add_middleware(
 class IPRequest(BaseModel):
     ip: str
 
+class IPNodeRequest(BaseModel):
+    ip: str
+    node: str
+
 # --- ENDPOINTS ---
 
 @app.get("/")
@@ -72,10 +76,10 @@ def run_workflow(req: IPRequest):
 
 
 @app.post("/run_node")
-def run_workflow(req: IPRequest, node: str):
+def run_workflow(req: IPNodeRequest):
     try:
         nodes = build_nodes(req.ip.strip())
-        result = nodes[node].execute()
+        result = nodes[req.node.strip()].execute()
         return {"message": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

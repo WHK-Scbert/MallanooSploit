@@ -427,10 +427,13 @@ class NMAPVulnNode(BaseNode):
 
 
 
+
+
+
 class SMBMountNode(BaseNode):
-    def __init__(self, node_id, name, parameters, previous_input=None):
-        super().__init__(node_id, name, parameters, previous_input)
-        self.output = {}
+    def __init__(self, node_id, name, parameters):
+        super().__init__(node_id, name, parameters)
+        self.node_type = "SMBMountNode"
 
     def enumerate_shares(self, ip):
         try:
@@ -448,65 +451,44 @@ class SMBMountNode(BaseNode):
                 shares.append(share_name)
         return shares
 
-    def mount_share(self, ip, share_name, mount_point):
-        os.makedirs(mount_point, exist_ok=True)
-        command = f"sudo mount -t cifs //{ip}/{share_name} {mount_point} -o guest"
+    def generate_ips_from_cidr(self, cidr):
         try:
-            result = subprocess.run(command, shell=True, capture_output=True, text=True)
-            if result.returncode == 0:
-                return {"status": "success", "info": f"Mounted {share_name} from {ip} at {mount_point}"}
-            else:
-                return {"status": "error", "info": result.stderr}
-        except Exception as e:
-            return {"status": "error", "info": str(e)}
+            network = ipaddress.ip_network(cidr, strict=False)
+            return [str(ip) for ip in network.hosts()]
+        except ValueError:
+            return []
 
-    def execute(self, inputs):
-        data = self.previous_input
-        print(data)
-        # Read the SMB_Cracker_Result.json
-        with open(self.parameters.get("input_file", "SMB_Cracker_Result.json"), 'r') as f:
-            data = json.load(f)
+    def execute(self, input_data=None):
+        # Retrieve the IP or CIDR from parameters
+        ip_or_cidr = self.parameters.get("ip", "127.0.0.1")
 
-        # Retrieve IP addresses from the 'success' key
-        ips = list(data['4']['success'].keys())
+        # Determine if it's a CIDR range or a single IP
+        if '/' in ip_or_cidr:
+            ip_list = self.generate_ips_from_cidr(ip_or_cidr)
+        else:
+            ip_list = [ip_or_cidr]
+        
         base_dir = './smb_mounts'
         os.makedirs(base_dir, exist_ok=True)
 
         results = {}
-        success_ips = {}  # To store only IPs that have mountable shares
+        success_ips = {}  # To store only IPs that have enumerated shares
 
-        for ip in ips:
-            ip_dir = os.path.join(base_dir, ip)
-            os.makedirs(ip_dir, exist_ok=True)
+        for ip in ip_list:
             print(f"\nEnumerating shares for {ip}...")
 
-            # Enumerate shares
+            # Enumerate shares for the current IP
             share_output = self.enumerate_shares(ip)
             shares = self.parse_shares(share_output)
 
             if not shares:
                 results[ip] = {"status": "error", "info": "No shares found or enumeration failed."}
-                continue
-
-            results[ip] = {"shares": {}, "status": "success"}
-            mountable_shares = {}
-
-            for share in shares:
-                share_dir = os.path.join(ip_dir, share)
-                os.makedirs(share_dir, exist_ok=True)
-
-                print(f"Attempting to mount share '{share}' from {ip}...")
-                mount_result = self.mount_share(ip, share, share_dir)
-                results[ip]["shares"][share] = mount_result
-
-                if mount_result["status"] == "success":
-                    mountable_shares[share] = mount_result
-
-            if mountable_shares:
-                success_ips[ip] = mountable_shares  # Only add IPs that have mountable shares
+            else:
+                results[ip] = {"shares": shares, "status": "success"}
+                success_ips[ip] = shares  # Only add IPs that have enumerated shares
 
         self.output = {
-            "output": "SMB Enumeration and Mounting Complete",
+            "output": "SMB Enumeration Complete",
             "success": success_ips,
             "data": results
         }
@@ -585,3 +567,90 @@ class Workflow:
         with open(self.output_file, "w") as f:
             json.dump(self.results, f, indent=2)
         print(f"[💾] Workflow results saved to {self.output_file}")
+
+
+
+# class SMBMountNode(BaseNode):
+#     def __init__(self, node_id, name, parameters):
+#         super().__init__(node_id, name, parameters)
+#         self.node_type = "SMBMountNode"
+
+#     def enumerate_shares(self, ip):
+#         try:
+#             result = subprocess.check_output(['smbclient', '-L', f'//{ip}', '-N'], stderr=subprocess.STDOUT, text=True)
+#             return result
+#         except subprocess.CalledProcessError as e:
+#             return e.output
+
+#     def parse_shares(self, output):
+#         shares = []
+#         lines = output.splitlines()
+#         for line in lines:
+#             if 'Disk' in line:
+#                 share_name = line.split()[0]
+#                 shares.append(share_name)
+#         return shares
+
+#     def mount_share(self, ip, share_name, mount_point):
+#         os.makedirs(mount_point, exist_ok=True)
+#         command = f"sudo mount -t cifs //{ip}/{share_name} {mount_point} -o username=guest,password="
+#         try:
+#             result = subprocess.run(command, shell=True, capture_output=True, text=True)
+#             if result.returncode == 0:
+#                 return {"status": "success", "info": f"Mounted {share_name} from {ip} at {mount_point}"}
+#             else:
+#                 return {"status": "error", "info": result.stderr}
+#         except Exception as e:
+#             return {"status": "error", "info": str(e)}
+
+#     def execute(self):
+#         # data = self.previous_input
+#         # print(data)
+#         # Read the SMB_Cracker_Result.json
+#         with open(self.parameters.get("input_file", "SMB_Cracker_Result.json"), 'r') as f:
+#             data = json.load(f)
+
+#         # Retrieve IP addresses from the 'success' key
+#         ips = list(data['4']['success'].keys())
+#         base_dir = './smb_mounts'
+#         os.makedirs(base_dir, exist_ok=True)
+
+#         results = {}
+#         success_ips = {}  # To store only IPs that have mountable shares
+
+#         for ip in ips:
+#             ip_dir = os.path.join(base_dir, ip)
+#             os.makedirs(ip_dir, exist_ok=True)
+#             print(f"\nEnumerating shares for {ip}...")
+
+#             # Enumerate shares
+#             share_output = self.enumerate_shares(ip)
+#             shares = self.parse_shares(share_output)
+
+#             if not shares:
+#                 results[ip] = {"status": "error", "info": "No shares found or enumeration failed."}
+#                 continue
+
+#             results[ip] = {"shares": {}, "status": "success"}
+#             mountable_shares = {}
+
+#             for share in shares:
+#                 share_dir = os.path.join(ip_dir, share)
+#                 os.makedirs(share_dir, exist_ok=True)
+
+#                 print(f"Attempting to mount share '{share}' from {ip}...")
+#                 mount_result = self.mount_share(ip, share, share_dir)
+#                 results[ip]["shares"][share] = mount_result
+
+#                 if mount_result["status"] == "success":
+#                     mountable_shares[share] = mount_result
+
+#             if mountable_shares:
+#                 success_ips[ip] = mountable_shares  # Only add IPs that have mountable shares
+
+#         self.output = {
+#             "output": "SMB Enumeration and Mounting Complete",
+#             "success": success_ips,
+#             "data": results
+#         }
+#         return self.output

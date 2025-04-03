@@ -4,9 +4,9 @@ RESULT_DIR = "./results"
 
 def SMBCraker_Builder(nodes):
     SMB_Cracker_wf = Workflow(output_file=RESULT_DIR+'/SMB_Cracker_result.json')
-    SMB_Cracker_wf.add_nodes_by_id(nodes, ['9','4','8'])
+    SMB_Cracker_wf.add_nodes_by_id(nodes, ['9','4','12'])
     SMB_Cracker_wf.connect_nodes('9','4')
-    SMB_Cracker_wf.connect_nodes('4','8')
+    SMB_Cracker_wf.connect_nodes('4','12')
     return SMB_Cracker_wf
 
 

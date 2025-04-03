@@ -128,12 +128,12 @@ def build_nodes():
 
 
     smb_mount_node = SMBMountNode(
-        node_id="1", 
+        node_id="12", 
         name="SMB Enumeration and Mount Node", 
         parameters={
-            "input_file": "./results/SMB_Cracker_Result.json"
+            "ip": ip
         }
-        )
+    )
 
 
     report_generate_node = ChatGPTNode(
