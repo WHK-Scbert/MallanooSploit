@@ -1,0 +1,26 @@
+{
+    "10.107.136.68": {
+        "ping1": null,
+        "initial_nmap_node": null,
+        "smb_nmap_node": null,
+        "smbclient_node": true,
+        "ftp_anonymous_node": null,
+        "banner_node": null,
+        "chat_node": null,
+        "blue_node": null,
+        "smb_vuln_node": [
+            445
+        ],
+        "machine_check_node": null,
+        "os_nmap_node": null,
+        "smb_mount_node": [
+            "ADMIN$",
+            "C$",
+            "D$",
+            "F$",
+            "Users",
+            "\u0e19\u0e07\u0e1b.\u0e1e\u0e2d",
+            "\u0e19\u0e07\u0e1b.\u0e1e\u0e2d."
+        ]
+    }
+}
