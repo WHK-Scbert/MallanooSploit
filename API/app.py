@@ -8,7 +8,7 @@ from lib.map_func import build_nodes
 from glob import glob
 from fastapi.middleware.cors import CORSMiddleware
 from lib.json_builder import organize_results_by_ip
-
+from lib.ai import AICSNode
 
 # --- CONFIG ---
 IP_FILE = "./target_ip.txt"
@@ -16,6 +16,15 @@ RESULT_DIR = "./results"  # Folder containing multiple result JSON files
 
 # --- FASTAPI SETUP ---
 app = FastAPI(title="MallanooSploit API", version="1.0")
+
+# --- AICS Setup ---
+aics_node = AICSNode()
+
+class ChatPayload(BaseModel):
+    ip: str
+    message: str
+
+
 # Allow your Svelte app to access the FastAPI backend
 app.add_middleware(
     CORSMiddleware,
@@ -80,7 +89,7 @@ def run_workflow(req: IPNodeRequest):
     try:
         nodes = build_nodes(req.ip.strip())
         result = nodes[req.node.strip()].execute()
-        return {"message": result}
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -171,3 +180,12 @@ def get_all_results():
         raise HTTPException(status_code=404, detail="No valid result data found.")
     
     return merged_results
+
+
+@app.post("/chat")
+async def chat_with_aics(payload: ChatPayload):
+    try:
+        result = aics_node.handle_request(payload.ip.strip(), payload.message.strip())
+        return result
+    except Exception as e:
+        return {"error": str(e)}
