@@ -8,6 +8,19 @@ from lib.workflow import SMBCraker_Builder, FTPAnonymousCheck_Builder
 from lib.map_func import build_nodes
 from lib.json_builder import organize_results_by_ip
 from lib.ai import AICSNode
+# decrypt.py
+from Crypto.Cipher import AES
+from base64 import b64decode
+
+key = "12345678901234567890123456789012"
+iv = "1234567890123456"
+def decrypt_aes256(cipher_text_b64, key=key, iv=iv):
+    cipher_text = b64decode(cipher_text_b64)
+    cipher = AES.new(key.encode(), AES.MODE_CBC, iv.encode())
+    decrypted = cipher.decrypt(cipher_text)
+    # Remove PKCS7 padding
+    padding_len = decrypted[-1]
+    return decrypted[:-padding_len].decode()
 
 app = Flask(__name__)
 CORS(app)  # Allow all origins
@@ -42,8 +55,11 @@ def update_target_ip():
 @app.route("/run", methods=["POST"])
 def run_workflow():
     data = request.get_json()
+    ip_address = decrypt_aes256(data["ip"].strip(), key, iv)
+    print(ip_address)
     try:
-        nodes = build_nodes(data["ip"].strip())
+        # nodes = build_nodes(data["ip"].strip())
+        nodes = build_nodes(ip_address)
         SMB_Cracker_wf = SMBCraker_Builder(nodes)
         result1 = SMB_Cracker_wf.execute()
 
@@ -134,6 +150,7 @@ def chat_with_aics():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # --- MAIN ---
 if __name__ == "__main__":
